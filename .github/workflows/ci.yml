@@ -105,5 +105,17 @@ jobs:
           cargo +"$RUST" test --locked --release --target ${{ matrix.target }} \
             -p xara-phy -p xara-arq -p xara-host "${features[@]}"
 
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "RUST=$(cat .rust-version)" >> "$GITHUB_ENV"
+      - run: rustup toolchain install "$RUST" --profile minimal
+      - run: cargo +"$RUST" test --locked --workspace --exclude xara
+      - run: cargo +"$RUST" test --locked -p xara --no-default-features
+
   bins:
     uses: ./.github/workflows/bins.yml

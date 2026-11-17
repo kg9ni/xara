@@ -7,7 +7,7 @@ publish.workspace = true
 license.workspace = true
 readme = "README.md"
 repository.workspace = true
-description = "A VARA-compatible HF/FM modem and passive monitor for Linux, FreeBSD and macOS."
+description = "A VARA-compatible HF/FM modem and passive monitor for Linux, FreeBSD, macOS and Windows."
 
 [dependencies]
 xara-phy.workspace = true
@@ -16,8 +16,23 @@ xara-host.workspace = true
 xara-ui.workspace = true
 libc.workspace = true
 
-[target.'cfg(not(target_os = "macos"))'.dependencies]
+[target.'cfg(not(any(target_os = "macos", target_os = "windows")))'.dependencies]
 alsa-sys = { workspace = true, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Devices_Communication",
+    "Win32_Devices_Properties",
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Console",
+    "Win32_System_Threading",
+    "Win32_System_Variant",
+    "Win32_UI_Shell_PropertiesSystem",
+] }
 
 [dev-dependencies]
 xara-testkit.workspace = true

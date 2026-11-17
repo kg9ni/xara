@@ -347,7 +347,10 @@ fn main() -> ExitCode {
         }
     }
     let stop = Arc::new(AtomicBool::new(false));
+    #[cfg(unix)]
     let _ = signals::trap(&[libc::SIGINT, libc::SIGTERM], stop.clone(), || {});
+    #[cfg(windows)]
+    let _ = signals::trap(stop.clone(), || {});
     match run(a, &stop) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,

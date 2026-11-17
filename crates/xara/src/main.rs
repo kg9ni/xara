@@ -36,6 +36,8 @@ const SECOND_SIGNAL_GRACE: Duration = Duration::from_secs(2);
 const EXIT_RESTART_FAILED: u8 = 75;
 const TOKEN_ENV: &str = "XARA_UI_TOKEN";
 const RECORD_PART_ENV: &str = "XARA_RECORD_PART";
+#[cfg(windows)]
+const RESTART_ENV: &str = "XARA_RESTART";
 
 struct Args {
     audio: Backend,
@@ -344,14 +346,27 @@ fn state_dir(a: &Args) -> Option<PathBuf> {
 }
 
 fn make_state_dir(d: &Path) -> Result<Option<String>, String> {
-    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
     let err = |e: std::io::Error| format!("{}: {e}", d.display());
     if !d.exists() {
-        std::fs::DirBuilder::new().recursive(true).mode(0o700).create(d).map_err(err)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            std::fs::DirBuilder::new().recursive(true).mode(0o700).create(d).map_err(err)?;
+        }
+        #[cfg(windows)]
+        std::fs::create_dir_all(d).map_err(err)?;
         return Ok(None);
     }
-    let mode = std::fs::metadata(d).map_err(err)?.permissions().mode();
-    Ok((mode & 0o022 != 0).then(|| format!("{} is writable by other users (mode {:o})", d.display(), mode & 0o777)))
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(d).map_err(err)?.permissions().mode();
+        let shared = mode & 0o022 != 0;
+        let warn = format!("{} is writable by other users (mode {:o})", d.display(), mode & 0o777);
+        return Ok(shared.then_some(warn));
+    }
+    #[cfg(windows)]
+    Ok(None)
 }
 
 fn ui_token(a: &Args, dir: Option<&Path>, inherited: Option<String>) -> std::io::Result<Option<String>> {
@@ -692,26 +707,44 @@ fn open_audio(
 }
 
 fn restart(argv: &[String], token: Option<&str>, record_part: Option<u32>) -> ExitCode {
-    use std::os::unix::process::CommandExt;
     say!("restarting");
-    let err = match std::env::current_exe() {
-        Ok(exe) => {
-            let mut c = std::process::Command::new(exe);
-            if let Some(t) = token {
-                c.env(TOKEN_ENV, t);
-            }
-            if let Some(n) = record_part {
-                c.env(RECORD_PART_ENV, n.to_string());
-            }
-            if let Some(a0) = std::env::args_os().next() {
-                c.arg0(a0);
-            }
-            c.args(argv).exec()
+    let exe = match std::env::current_exe() {
+        Ok(exe) => exe,
+        Err(e) => {
+            say!("restart failed: {e}");
+            return ExitCode::from(EXIT_RESTART_FAILED);
         }
-        Err(e) => e,
     };
-    say!("restart failed: {err}");
-    ExitCode::from(EXIT_RESTART_FAILED)
+    let mut c = std::process::Command::new(exe);
+    if let Some(t) = token {
+        c.env(TOKEN_ENV, t);
+    }
+    if let Some(n) = record_part {
+        c.env(RECORD_PART_ENV, n.to_string());
+    }
+    c.args(argv);
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        if let Some(a0) = std::env::args_os().next() {
+            c.arg0(a0);
+        }
+        let err = c.exec();
+        say!("restart failed: {err}");
+        ExitCode::from(EXIT_RESTART_FAILED)
+    }
+    #[cfg(windows)]
+    {
+        // The new process waits briefly so this one can release the TCP ports first.
+        c.env(RESTART_ENV, "1");
+        match c.spawn() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(e) => {
+                say!("restart failed: {e}");
+                ExitCode::from(EXIT_RESTART_FAILED)
+            }
+        }
+    }
 }
 
 fn main() -> ExitCode {
@@ -722,12 +755,18 @@ fn main() -> ExitCode {
 }
 
 fn real_main() -> Result<ExitCode, String> {
+    #[cfg(windows)]
+    if std::env::var_os(RESTART_ENV).is_some() {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
     let inherited = std::env::var(TOKEN_ENV).ok().filter(|t| valid_token(t));
     let part: u32 = std::env::var(RECORD_PART_ENV).ok().and_then(|p| p.parse().ok()).unwrap_or(0);
     // SAFETY: no other thread has started yet, so nothing reads the environment concurrently.
     unsafe {
         std::env::remove_var(TOKEN_ENV);
         std::env::remove_var(RECORD_PART_ENV);
+        #[cfg(windows)]
+        std::env::remove_var(RESTART_ENV);
     }
     let cmdline: Vec<String> = std::env::args().skip(1).collect();
     let (config, argv) = match with_config(&cmdline) {
@@ -785,11 +824,16 @@ fn real_main() -> Result<ExitCode, String> {
         say!("{e}");
     }
     let stop = Arc::new(AtomicBool::new(false));
-    let sigs = [libc::SIGINT, libc::SIGTERM, libc::SIGHUP, libc::SIGQUIT];
-    let signaled = signals::trap(&sigs, stop.clone(), || {
+    let before_exit = || {
         xara::ptt::wait_released(SECOND_SIGNAL_GRACE);
-    })
-    .map_err(|e| format!("signals: {e}"))?;
+    };
+    #[cfg(unix)]
+    let signaled = {
+        let sigs = [libc::SIGINT, libc::SIGTERM, libc::SIGHUP, libc::SIGQUIT];
+        signals::trap(&sigs, stop.clone(), before_exit).map_err(|e| format!("signals: {e}"))?
+    };
+    #[cfg(windows)]
+    let signaled = signals::trap(stop.clone(), before_exit).map_err(|e| format!("signals: {e}"))?;
     let (mut a, io) = open_audio(&argv, a, applied.then_some(&saved), &mut error).map_err(|e| e.to_string())?;
     if let Some(d) = &dir {
         say!("settings in {}", d.join(settings::FILE).display());
@@ -1028,6 +1072,7 @@ mod tests {
         assert_eq!(with_config(&argv("--config /nonexistent/xara.conf -h")), Ok((None, argv("-h"))));
     }
 
+    #[cfg(unix)]
     #[test]
     fn state_dir_is_created_private_and_a_shared_one_warned_about() {
         use std::os::unix::fs::PermissionsExt;

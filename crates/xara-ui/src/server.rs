@@ -224,6 +224,7 @@ fn serve(
     Ok(UiServer { addr: local })
 }
 
+#[cfg(unix)]
 fn hostname() -> Option<String> {
     let mut b = [0u8; 256];
     // SAFETY: b is valid for its length; gethostname writes at most that many bytes.
@@ -235,10 +236,42 @@ fn hostname() -> Option<String> {
     (!h.is_empty()).then(|| h.to_string())
 }
 
+#[cfg(windows)]
+fn hostname() -> Option<String> {
+    use windows_sys::Win32::System::WindowsProgramming::GetComputerNameW;
+    let mut buf = [0u16; 256];
+    let mut n = buf.len() as u32;
+    // SAFETY: buf holds n wide characters. On success n is the length without the trailing NUL.
+    if unsafe { GetComputerNameW(buf.as_mut_ptr(), &mut n) } == 0 {
+        return None;
+    }
+    let h = String::from_utf16_lossy(&buf[..n as usize]);
+    (!h.is_empty()).then_some(h)
+}
+
+#[cfg(unix)]
 pub fn new_token() -> io::Result<String> {
     let mut b = [0u8; 16];
     std::fs::File::open("/dev/urandom")?.read_exact(&mut b)?;
-    Ok(b.iter().map(|x| format!("{x:02x}")).collect())
+    Ok(hex_token(&b))
+}
+
+#[cfg(windows)]
+pub fn new_token() -> io::Result<String> {
+    use windows_sys::Win32::Security::Cryptography::{BCRYPT_USE_SYSTEM_PREFERRED_RNG, BCryptGenRandom};
+    let mut b = [0u8; 16];
+    // SAFETY: b is 16 writable bytes. A null algorithm plus the system-RNG flag is the documented call.
+    let status = unsafe {
+        BCryptGenRandom(std::ptr::null_mut(), b.as_mut_ptr(), b.len() as u32, BCRYPT_USE_SYSTEM_PREFERRED_RNG)
+    };
+    if status != 0 {
+        return Err(io::Error::other(format!("random bytes failed: 0x{:08x}", status as u32)));
+    }
+    Ok(hex_token(&b))
+}
+
+fn hex_token(b: &[u8]) -> String {
+    b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
 pub fn valid_token(t: &str) -> bool {
@@ -246,12 +279,15 @@ pub fn valid_token(t: &str) -> bool {
 }
 
 pub fn stored_token(dir: &Path) -> io::Result<String> {
-    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
     let path = dir.join(TOKEN_FILE);
     match std::fs::read_to_string(&path) {
         Ok(t) if valid_token(t.trim()) => {
-            if std::fs::metadata(&path)?.permissions().mode() & 0o077 != 0 {
-                std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                if std::fs::metadata(&path)?.permissions().mode() & 0o077 != 0 {
+                    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+                }
             }
             return Ok(t.trim().to_string());
         }
@@ -264,7 +300,14 @@ pub fn stored_token(dir: &Path) -> io::Result<String> {
         Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
         _ => {}
     }
-    let mut f = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&tmp)?;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let mut f = opts.open(&tmp)?;
     writeln!(f, "{t}")?;
     f.sync_all()?;
     std::fs::rename(&tmp, &path)?;

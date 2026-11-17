@@ -12,8 +12,17 @@ description = "Telemetry feed and web UI server (HTTP, WebSocket, NDJSON) for th
 [dependencies]
 xara-arq.workspace = true
 xara-host.workspace = true
-libc.workspace = true
 rustfft.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security_Cryptography",
+    "Win32_System_WindowsProgramming",
+] }
 
 [dev-dependencies]
 xara-testkit.workspace = true

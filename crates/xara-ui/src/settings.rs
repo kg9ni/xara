@@ -166,13 +166,19 @@ pub fn load(dir: &Path) -> Result<Pairs, String> {
 }
 
 pub fn store(dir: &Path, kv: &Pairs) -> io::Result<()> {
-    use std::os::unix::fs::OpenOptionsExt;
     let tmp = dir.join(format!(".{FILE}.tmp"));
     match std::fs::remove_file(&tmp) {
         Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
         _ => {}
     }
-    let mut f = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o644).open(&tmp)?;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o644);
+    }
+    let mut f = opts.open(&tmp)?;
     f.write_all(b"# written by xara; keys are xara(1) options without the leading --\n")?;
     f.write_all(render(kv).as_bytes())?;
     f.sync_all()?;
@@ -259,12 +265,15 @@ mod tests {
         assert_eq!(load(&dir).unwrap(), kv(&[("call", "N1CALL"), ("drive-db", "-12")]));
         s.reset().unwrap();
         assert_eq!(load(&dir).unwrap(), kv(&[("drive-db", "-12")]));
-        let victim = dir.join("victim");
-        std::fs::write(&victim, "keep\n").unwrap();
-        std::os::unix::fs::symlink(&victim, dir.join(format!(".{FILE}.tmp"))).unwrap();
-        s.save(&kv(&[("call", "N2CALL")])).unwrap();
-        assert_eq!(std::fs::read_to_string(&victim).unwrap(), "keep\n");
-        assert!(!std::fs::symlink_metadata(dir.join(FILE)).unwrap().file_type().is_symlink());
+        #[cfg(unix)]
+        {
+            let victim = dir.join("victim");
+            std::fs::write(&victim, "keep\n").unwrap();
+            std::os::unix::fs::symlink(&victim, dir.join(format!(".{FILE}.tmp"))).unwrap();
+            s.save(&kv(&[("call", "N2CALL")])).unwrap();
+            assert_eq!(std::fs::read_to_string(&victim).unwrap(), "keep\n");
+            assert!(!std::fs::symlink_metadata(dir.join(FILE)).unwrap().file_type().is_symlink());
+        }
         std::fs::write(dir.join(FILE), "call = N1CALL\nradio = yes\n").unwrap();
         assert!(load(&dir).unwrap_err().ends_with("line 2: unknown setting \"radio\""));
         std::fs::remove_dir_all(&dir).unwrap();

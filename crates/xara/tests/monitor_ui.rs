@@ -15,7 +15,25 @@ fn free_port() -> u16 {
 fn monitor() -> Command {
     let mut c = Command::new(env!("CARGO_BIN_EXE_xara-monitor"));
     c.env("PULSE_SERVER", "unix:/nonexistent/xara-test").env_remove("STATE_DIRECTORY");
+    // A new process group lets the test send Ctrl+Break to the monitor alone.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        c.creation_flags(0x00000200);
+    }
     c
+}
+
+fn interrupt(child: &Child) {
+    #[cfg(unix)]
+    unsafe {
+        libc::kill(child.id() as i32, libc::SIGTERM);
+    }
+    #[cfg(windows)]
+    unsafe {
+        use windows_sys::Win32::System::Console::{CTRL_BREAK_EVENT, GenerateConsoleCtrlEvent};
+        GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, child.id());
+    }
 }
 
 struct Kill(Child);
@@ -147,7 +165,7 @@ fn monitor_serves_a_read_only_page_and_keeps_it_after_the_input() {
     assert_eq!(status["ts"].as_f64(), Some(2.0), "{status}");
     assert!(status["decoder"]["stats"]["tx"].is_u64() && status["decoder"]["keys"].is_array(), "{status}");
 
-    unsafe { libc::kill(child.0.id() as i32, libc::SIGTERM) };
+    interrupt(&child.0);
     let code = child.wait().code();
     drop(child);
     let stdout = stdout.join().unwrap();

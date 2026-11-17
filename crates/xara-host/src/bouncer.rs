@@ -1,12 +1,11 @@
 use std::io;
 use std::net::{TcpListener, TcpStream};
+#[cfg(unix)]
 use std::os::fd::AsRawFd;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 use crate::server::ACCEPT_BACKOFF;
-
-const POLL_MS: libc::c_int = 1000;
 
 struct Gate {
     l: TcpListener,
@@ -62,17 +61,40 @@ fn bounce(g: &Gate) {
     }
 }
 
+#[cfg(unix)]
 fn pending(l: &TcpListener) -> bool {
     let mut p = libc::pollfd { fd: l.as_raw_fd(), events: libc::POLLIN, revents: 0 };
     // SAFETY: p is one valid pollfd for the duration of the call.
-    unsafe { libc::poll(&mut p, 1, POLL_MS) > 0 }
+    unsafe { libc::poll(&mut p, 1, 1000) > 0 }
 }
 
+#[cfg(unix)]
 fn reset(c: &TcpStream) {
     let linger = libc::linger { l_onoff: 1, l_linger: 0 };
     let len = std::mem::size_of_val(&linger) as libc::socklen_t;
     // SAFETY: c is an open socket and linger outlives the call.
     unsafe { libc::setsockopt(c.as_raw_fd(), libc::SOL_SOCKET, libc::SO_LINGER, (&raw const linger).cast(), len) };
+}
+
+#[cfg(windows)]
+fn pending(l: &TcpListener) -> bool {
+    use std::os::windows::io::AsRawSocket;
+    use windows_sys::Win32::Networking::WinSock::{POLLIN, SOCKET, WSAPOLLFD, WSAPoll};
+    let mut p = WSAPOLLFD { fd: l.as_raw_socket() as SOCKET, events: POLLIN, revents: 0 };
+    // SAFETY: p is one valid poll entry and lives for this call.
+    unsafe { WSAPoll(&mut p, 1, 1000) > 0 }
+}
+
+#[cfg(windows)]
+fn reset(c: &TcpStream) {
+    use std::os::windows::io::AsRawSocket;
+    use windows_sys::Win32::Networking::WinSock::{LINGER, SO_LINGER, SOCKET, SOL_SOCKET, setsockopt};
+    let linger = LINGER { l_onoff: 1, l_linger: 0 };
+    let len = std::mem::size_of::<LINGER>() as i32;
+    // SAFETY: c is an open socket and linger outlives the call. Linger 0 makes close send a reset.
+    unsafe {
+        setsockopt(c.as_raw_socket() as SOCKET, SOL_SOCKET, SO_LINGER, (&linger as *const LINGER).cast(), len);
+    }
 }
 
 #[cfg(test)]

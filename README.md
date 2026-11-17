@@ -1,6 +1,6 @@
 # xara
 
-a VARA-compatible modem for linux, freebsd and macOS. tested against VARA HF 4.9.0 and FM 4.4.0.
+a VARA-compatible modem for linux, freebsd, macOS and windows. tested against VARA HF 4.9.0 and FM 4.4.0.
 
 ## minimum config
 
@@ -22,8 +22,8 @@ to transmit, add `--radio` and `--ptt` flags.
 
 ## install
 
-linux, freebsd and macOS only. xara has no Windows build: it talks to the
-sound systems on those three systems.
+linux and freebsd use ALSA or Pulse. macOS uses CoreAudio. windows uses
+WASAPI, the sound system built into Windows.
 
 ### linux
 
@@ -63,8 +63,35 @@ name) and load it with launchctl. the web page address is in
 
 ### windows
 
-there is no Windows installer. xara does not run on Windows. use Linux,
-FreeBSD, or macOS.
+there is no installer file yet. build xara on the Windows PC. the Windows
+build uses WASAPI for sound. USB CM108 keying and (tr)uSDX are not in this
+version.
+
+1. Install Rust from <https://rustup.rs>. The default choices are fine. Close
+   the installer, then open a new PowerShell window.
+2. Go to the xara folder and type this:
+
+       cargo build --release --no-default-features
+
+   `--no-default-features` leaves out the Linux sound libraries, which do not
+   build on Windows. Success looks like `Finished release` and a program at
+   `target\release\xara.exe`.
+3. See the sound device names:
+
+       .\target\release\xara.exe --list-devices
+
+4. Start xara with your call sign, those names, and a COM port for the
+   push-to-talk line. Example:
+
+       .\target\release\xara.exe --call YOURCALL --hf 2300 --capture "Microphone" --playback "CABLE Input" --radio --ptt rts:COM3 --ui-port 8080 --ui-control
+
+5. The page address is printed at startup. Open that address in a browser.
+
+`--ptt rts:COM3` keys the radio with the RTS line on COM3. `dtr:COM3` uses DTR.
+`rigctld` and `vox` work too. without `--radio`, playback has to be a virtual
+cable: the name contains cable, virtual, voicemeeter, or null. Ctrl+C stops
+xara and unkeys the radio. a second Ctrl+C, or closing the window, unkeys
+before the program exits.
 
 ## building
 
@@ -107,7 +134,7 @@ container on x86_64:
 
     --call CALL             your callsign (required)
 
-    --audio BACKEND         pulse, alsa or coreaudio; default pulse on linux/bsd and coreaudio on macOS
+    --audio BACKEND         pulse, alsa, coreaudio or wasapi; default pulse on linux/bsd, coreaudio on macOS, wasapi on windows
     --list-devices          list capture and playback devices for --audio
     --capture SOURCE        audio source
     --playback SINK         audio sink
@@ -161,6 +188,9 @@ summary of settings:
     --ptt vox                   use VOX (just don't bother)
     --ptt rts:DEV               key serial port on rts, hold dtr low
     --ptt dtr:DEV               key serial port on dtr, hold rts low
+
+on Windows, DEV is a COM port such as COM3 (`rts:COM3`). CM108 keying and
+(tr)uSDX are not available in this Windows version.
     --ptt cm108:DEV[:GPIO]      cm108/cm119 HID GPIO (default GPIO: 3)
     --ptt cm108:VID:PID[:GPIO]  cm108/cm119 by hex USB id (stable across boots)
     --ptt rigctld[:HOST:PORT]   hamlib rigctld CAT on HOST:PORT
@@ -182,7 +212,7 @@ options:
     --wav FILE              load from a wav file
     --stdin RATE            s16le mono at RATE Hz
 
-    --audio BACKEND         pulse, alsa or coreaudio; default coreaudio on macOS, else pulse
+    --audio BACKEND         pulse, alsa, coreaudio or wasapi; default coreaudio on macOS, wasapi on windows, else pulse
     --capture SOURCE        audio source
 
     --hf 500|2300|2750      HF bandwidth (default 2300)

@@ -1,8 +1,10 @@
 use std::cell::Cell;
 use std::fs::{File, OpenOptions};
-use std::io::{self, BufRead, BufReader, IsTerminal, Write};
+use std::io::{self, BufRead, BufReader, Write};
 use std::net::{TcpStream, ToSocketAddrs};
+#[cfg(unix)]
 use std::os::fd::AsRawFd;
+#[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
@@ -10,6 +12,7 @@ use std::sync::{Arc, Condvar, Mutex, Once, PoisonError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+#[cfg(unix)]
 use crate::Ioctl;
 #[cfg(target_os = "macos")]
 use crate::hid::cm108_usb;
@@ -39,13 +42,7 @@ pub const RIGCTLD_DEFAULT: &str = "127.0.0.1:4532";
 impl PttSpec {
     pub fn parse(s: &str) -> Result<Self, String> {
         let (kind, rest) = s.split_once(':').unwrap_or((s, ""));
-        let path = |what: &str| {
-            if rest.starts_with('/') {
-                Ok(rest.to_string())
-            } else {
-                Err(format!("--ptt {what}: needs a device path, e.g. {what}:/dev/ttyACM0"))
-            }
-        };
+        let path = |what: &str| serial_device(what, rest);
         match kind {
             "vox" if rest.is_empty() => Ok(Self::Vox),
             "rts" => path("rts").map(Self::Rts),
@@ -90,8 +87,14 @@ impl PttSpec {
     pub fn open(&self) -> io::Result<Box<dyn Ptt>> {
         Ok(match self {
             Self::Vox => Box::new(Vox),
+            #[cfg(unix)]
             Self::Rts(p) => Box::new(Serial::open(p, libc::TIOCM_RTS)?),
+            #[cfg(unix)]
             Self::Dtr(p) => Box::new(Serial::open(p, libc::TIOCM_DTR)?),
+            #[cfg(windows)]
+            Self::Rts(p) => Box::new(Serial::open(p, true)?),
+            #[cfg(windows)]
+            Self::Dtr(p) => Box::new(Serial::open(p, false)?),
             Self::Cm108 { path, gpio } => Box::new(Cm108::open(path, *gpio)?),
             Self::Cm108Usb { vendor, product, gpio } => cm108_usb(*vendor, *product, *gpio)?,
             Self::Rigctld(a) => Box::new(Rigctld::open(a)?),
@@ -112,13 +115,42 @@ impl Ptt for Vox {
     }
 }
 
+#[cfg(not(windows))]
+fn serial_device(what: &str, rest: &str) -> Result<String, String> {
+    if rest.starts_with('/') {
+        Ok(rest.to_string())
+    } else {
+        Err(format!("--ptt {what}: needs a device path, e.g. {what}:/dev/ttyACM0"))
+    }
+}
+
+#[cfg(windows)]
+fn serial_device(what: &str, rest: &str) -> Result<String, String> {
+    com_port(rest).ok_or_else(|| format!("--ptt {what}: needs a COM port, e.g. {what}:COM3"))
+}
+
+/// `COM3` and `\\.\COM3` both become `\\.\COM3`, which COM10 and above require.
+#[cfg(windows)]
+fn com_port(rest: &str) -> Option<String> {
+    let t = rest.trim();
+    let n = t.strip_prefix(r"\\.\").unwrap_or(t);
+    let digits = n.strip_prefix("COM").or_else(|| n.strip_prefix("com"))?;
+    let port: u32 = digits.parse().ok()?;
+    (digits.len() <= 4 && port > 0).then(|| format!(r"\\.\COM{port}"))
+}
+
 pub struct Serial {
     f: File,
     path: String,
+    #[cfg(unix)]
     line: libc::c_int,
+    #[cfg(windows)]
+    rts: bool,
 }
 
+#[cfg(unix)]
 pub fn open_tty(path: &str) -> io::Result<File> {
+    use std::io::IsTerminal;
     let f = OpenOptions::new()
         .read(true)
         .write(true)
@@ -131,6 +163,7 @@ pub fn open_tty(path: &str) -> io::Result<File> {
     Ok(f)
 }
 
+#[cfg(unix)]
 pub fn modem(f: &File, req: Ioctl, bits: libc::c_int) -> io::Result<()> {
     // SAFETY: f is open and bits is the int the request reads.
     if unsafe { libc::ioctl(f.as_raw_fd(), req, &bits) } != 0 {
@@ -139,6 +172,7 @@ pub fn modem(f: &File, req: Ioctl, bits: libc::c_int) -> io::Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 impl Serial {
     pub fn open(path: &str, line: libc::c_int) -> io::Result<Self> {
         let f = open_tty(path)?;
@@ -156,6 +190,51 @@ impl Serial {
     }
 }
 
+#[cfg(windows)]
+impl Serial {
+    pub fn open(path: &str, rts: bool) -> io::Result<Self> {
+        use std::os::windows::io::FromRawHandle;
+        use windows_sys::Win32::Devices::Communication::{
+            CLRDTR, CLRRTS, DCB, EscapeCommFunction, GetCommState, SetCommState,
+        };
+        use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+        use windows_sys::Win32::Foundation::{GENERIC_READ, GENERIC_WRITE};
+        use windows_sys::Win32::Storage::FileSystem::{
+            CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+        };
+
+        let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: wide is a NUL-terminated path. The returned handle is owned by the File below.
+        let handle = unsafe {
+            CreateFileW(
+                wide.as_ptr(),
+                GENERIC_READ | GENERIC_WRITE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                std::ptr::null(),
+                OPEN_EXISTING,
+                FILE_ATTRIBUTE_NORMAL,
+                std::ptr::null_mut(),
+            )
+        };
+        if handle == INVALID_HANDLE_VALUE {
+            return Err(io::Error::other(format!("{path}: {}", io::Error::last_os_error())));
+        }
+        let f = unsafe { File::from_raw_handle(handle) };
+        let mut dcb: DCB = unsafe { std::mem::zeroed() };
+        dcb.DCBlength = std::mem::size_of::<DCB>() as u32;
+        // SAFETY: f owns the handle and dcb is a DCB with its length set.
+        if unsafe { GetCommState(handle, &mut dcb) } == 0 || unsafe { SetCommState(handle, &dcb) } == 0 {
+            return Err(io::Error::other(format!("{path} is not a serial port: {}", io::Error::last_os_error())));
+        }
+        // SAFETY: handle is the open COM port. Clearing both lines starts unkeyed.
+        if unsafe { EscapeCommFunction(handle, CLRRTS) } == 0 || unsafe { EscapeCommFunction(handle, CLRDTR) } == 0 {
+            return Err(io::Error::other(format!("{path}: {}", io::Error::last_os_error())));
+        }
+        Ok(Self { f, path: path.into(), rts })
+    }
+}
+
+#[cfg(unix)]
 impl Ptt for Serial {
     fn set(&mut self, on: bool) -> io::Result<()> {
         modem(&self.f, if on { libc::TIOCMBIS } else { libc::TIOCMBIC }, self.line)?;
@@ -167,6 +246,29 @@ impl Ptt for Serial {
 
     fn describe(&self) -> String {
         format!("{} on {} (other line held low)", if self.line == libc::TIOCM_RTS { "RTS" } else { "DTR" }, self.path)
+    }
+}
+
+#[cfg(windows)]
+impl Ptt for Serial {
+    fn set(&mut self, on: bool) -> io::Result<()> {
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::Devices::Communication::{CLRDTR, CLRRTS, EscapeCommFunction, SETDTR, SETRTS};
+        let func = match (self.rts, on) {
+            (true, true) => SETRTS,
+            (true, false) => CLRRTS,
+            (false, true) => SETDTR,
+            (false, false) => CLRDTR,
+        };
+        // SAFETY: f owns the COM-port handle for the life of this call.
+        if unsafe { EscapeCommFunction(self.f.as_raw_handle(), func) } == 0 {
+            return Err(io::Error::other(format!("{}: {}", self.path, io::Error::last_os_error())));
+        }
+        Ok(())
+    }
+
+    fn describe(&self) -> String {
+        format!("{} on {} (other line held low)", if self.rts { "RTS" } else { "DTR" }, self.path)
     }
 }
 

@@ -9,8 +9,11 @@ readme.workspace = true
 repository.workspace = true
 description = "VARA-compatible command, data and KISS TCP host ports for the xara modem."
 
-[dependencies]
+[target.'cfg(unix)'.dependencies]
 libc.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Networking_WinSock"] }
 
 [dev-dependencies]
 xara-testkit.workspace = true

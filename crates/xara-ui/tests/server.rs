@@ -4,7 +4,9 @@ use std::time::Instant;
 use xara_host::response::{LinkWidth, Response};
 use xara_testkit::json::Value;
 use xara_ui::messages::Info;
-use xara_ui::server::{Access, MAX_PAGES, MAX_STREAMS, TICK, TOKEN_FILE, UiServer, WS_IDLE, stored_token, valid_token};
+use xara_ui::server::{Access, MAX_PAGES, MAX_STREAMS, TICK, UiServer, WS_IDLE};
+#[cfg(unix)]
+use xara_ui::server::{TOKEN_FILE, stored_token, valid_token};
 use xara_ui::telemetry::{Control, Event, Telemetry, channel};
 use xara_ui::ws;
 
@@ -409,6 +411,7 @@ fn streams_and_viewers_cannot_take_the_control_slot() {
     drop((streams, viewers));
 }
 
+#[cfg(unix)]
 #[test]
 fn stored_token_is_private_and_stable() {
     use std::os::unix::fs::PermissionsExt;

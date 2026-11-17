@@ -5,7 +5,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use xara::audio::TxAudio;
-use xara::ptt::{Cm108, Event, Ptt, PttCtl, PttSpec, PttTiming, Rigctld, Serial, cm108_report};
+#[cfg(unix)]
+use xara::ptt::Serial;
+use xara::ptt::{Cm108, Event, Ptt, PttCtl, PttSpec, PttTiming, Rigctld, cm108_report};
 
 #[test]
 fn ptt_spec_parse() {
@@ -28,6 +30,14 @@ fn ptt_spec_parse() {
     let e = PttSpec::parse("vax").unwrap_err();
     assert!(e.contains("cm108:VID:PID") || e.contains("|VID:PID"), "{e}");
     assert_eq!(e.contains("cm108:DEV"), !cfg!(target_os = "macos"), "{e}");
+    #[cfg(windows)]
+    {
+        assert_eq!(PttSpec::parse("rts:COM3"), Ok(PttSpec::Rts(r"\\.\COM3".into())));
+        assert_eq!(PttSpec::parse("dtr:com12"), Ok(PttSpec::Dtr(r"\\.\COM12".into())));
+        assert_eq!(PttSpec::parse(r"rts:\\.\COM10"), Ok(PttSpec::Rts(r"\\.\COM10".into())));
+        assert!(PttSpec::parse("rts:COM").is_err());
+        assert!(PttSpec::parse("rts:/dev/ttyUSB0").is_err());
+    }
     assert_eq!(e.contains("trusdx"), cfg!(feature = "trusdx"), "{e}");
     assert_eq!(PttSpec::parse("trusdx").is_ok(), cfg!(feature = "trusdx"));
     for bad in [
@@ -97,11 +107,13 @@ impl Drop for Scratch {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn serial_refuses_non_serial_devices() {
     assert!(Serial::open("/dev/null", libc::TIOCM_RTS).is_err());
 }
 
+#[cfg(unix)]
 fn with_pty(f: impl FnOnce(&str)) {
     let (mut m, mut s) = (0, 0);
     let mut name = [0 as libc::c_char; 64];
@@ -116,7 +128,7 @@ fn with_pty(f: impl FnOnce(&str)) {
     }
 }
 
-#[cfg(not(target_os = "freebsd"))]
+#[cfg(all(unix, not(target_os = "freebsd")))]
 #[test]
 fn serial_refuses_ptys() {
     with_pty(|path| {
@@ -728,6 +740,7 @@ fn is_hidraw_accepts_only_hidraw_char_devices() {
     assert!(!xara::ptt::is_hidraw("/dev/null"));
     assert!(!xara::ptt::is_hidraw("/nonexistent"));
     assert!(!xara::ptt::is_hidraw(Scratch::new("plain").path()));
+    #[cfg(unix)]
     if let Some(h) =
         std::fs::read_dir("/dev").unwrap().flatten().find(|e| e.file_name().to_string_lossy().starts_with("hidraw"))
     {
