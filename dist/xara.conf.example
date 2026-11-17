@@ -37,6 +37,9 @@
 #hf = 2300
 #fm = narrow
 
+# opening connection attempts. any whole number. default is 15.
+#retries = 15
+
 ###
 # sound config (pick one)
 

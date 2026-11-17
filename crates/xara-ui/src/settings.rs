@@ -4,7 +4,7 @@ use std::sync::Mutex;
 
 pub const FILE: &str = "settings";
 const DRIVE: &str = "drive-db";
-pub const KEYS: [&str; 8] = ["call", "hf", "fm", DRIVE, "capture", "playback", "ptt-lead-ms", "ptt-tail-ms"];
+pub const KEYS: [&str; 9] = ["call", "hf", "fm", "retries", DRIVE, "capture", "playback", "ptt-lead-ms", "ptt-tail-ms"];
 const MAX_VALUE: usize = 256;
 
 pub type Pairs = Vec<(String, String)>;

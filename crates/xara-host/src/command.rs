@@ -36,7 +36,7 @@ pub enum Command {
     Chat(bool),
     WinlinkSession,
     P2pSession,
-    Retries(Result<u8, Invalid>),
+    Retries(Result<u32, Invalid>),
     Listen(bool),
     Public(bool),
     Cwid(bool),
@@ -130,9 +130,9 @@ fn drive(rest: &str) -> Drive {
     }
 }
 
-fn cbyte(v: f64) -> Result<u8, Invalid> {
+fn count(v: f64) -> Result<u32, Invalid> {
     let r = v.round_ties_even();
-    (0.0..=255.0).contains(&r).then_some(r as u8).ok_or(Invalid)
+    (r >= 0.0 && r <= f64::from(u32::MAX)).then_some(r as u32).ok_or(Invalid)
 }
 
 fn exact(line: &str) -> Option<Command> {
@@ -198,7 +198,7 @@ pub fn parse(line: &str) -> Option<Command> {
         return Some(c);
     }
     if let Some(rest) = line.strip_prefix("RETRIES ") {
-        return Some(Command::Retries(cbyte(vb_val(rest))));
+        return Some(Command::Retries(count(vb_val(rest))));
     }
     if let Some(rest) = line.strip_prefix("TUNE ") {
         return Some(match rest.trim() {

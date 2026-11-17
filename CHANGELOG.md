@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.4
+
+- connection retries are configurable, default 15, any whole number
+- the count applies only to the opening connection attempts
+
 ## 0.1.3
 
 - macOS / CoreAudio support thanks to NR5P's work in x0rro/xara#19

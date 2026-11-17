@@ -46,6 +46,7 @@ struct Args {
     digi: String,
     bw: Bandwidth,
     fm: Option<FmBandwidth>,
+    retries: Option<u32>,
     port: u16,
     kiss_port: Option<u16>,
     persistence: f64,
@@ -83,6 +84,7 @@ fn defaults() -> Args {
         digi: String::new(),
         bw: Bandwidth::Hz2300,
         fm: None,
+        retries: None,
         port: 8300,
         kiss_port: Some(xara_host::kiss::DEFAULT_PORT),
         persistence: xara_arq::hf::broadcast::DEFAULT_PERSISTENCE,
@@ -132,6 +134,13 @@ fn take(a: &mut Args, k: &str, mut v: impl FnMut() -> Result<String, String>) ->
                 "wide" => FmBandwidth::Wide,
                 m => return Err(format!("bad FM mode {m}")),
             })
+        }
+        "--retries" => {
+            let n: u64 = num(k, &v()?)?;
+            if n > u64::from(u32::MAX) {
+                return Err(format!("{k} must be a whole number from 0 to {}", u32::MAX));
+            }
+            a.retries = Some(n as u32);
         }
         "--port" => a.port = num(k, &v()?)?,
         "--kiss-port" => {
@@ -402,6 +411,12 @@ fn effective(a: &Args) -> Pairs {
         ("drive-db", a.drive_db.to_string()),
         ("capture", a.capture.clone()),
         ("playback", a.playback.clone()),
+        (
+            "retries",
+            a.retries
+                .unwrap_or(if a.fm.is_some() { fm::session::DEFAULT_RETRIES } else { hf::session::DEFAULT_RETRIES })
+                .to_string(),
+        ),
         ("ptt-lead-ms", a.timing.lead.as_millis().to_string()),
         ("ptt-tail-ms", a.timing.tail.as_millis().to_string()),
     ]
@@ -497,6 +512,9 @@ fn run(
         Some(bw) => {
             let mut cfg = fm::Config::new(bw, &a.call);
             cfg.host.registered = a.registered;
+            if let Some(n) = a.retries {
+                cfg.host.retries = n;
+            }
             let mut station = station::fm::Station::new(cfg, opts);
             station.set_digipeater(&a.digi);
             if !a.digi.is_empty() {
@@ -510,6 +528,9 @@ fn run(
                 ..hf::Config::new(a.bw, &a.call)
             };
             cfg.host.registered = a.registered;
+            if let Some(n) = a.retries {
+                cfg.host.retries = n;
+            }
             let mut station = station::hf::Station::new(cfg, opts);
             station.set_persistence(a.persistence);
             serve(a, io, tx, Tnc::new(station, host), settings, stop, rec)
@@ -939,6 +960,20 @@ mod tests {
         assert!(moved.is_err_and(|e| e.contains("must be the same serial port")));
         err("--audio trusdx --capture /dev/a --playback /dev/a --tx-buffer-ms 100", "does not apply to --audio trusdx");
         b("--audio trusdx --capture /dev/a --playback /dev/a --radio --ptt trusdx --trusdx-speaker").unwrap();
+    }
+
+    #[test]
+    fn retries_is_optional_and_any_whole_number() {
+        let base = "--call N2CALL --capture c --playback p";
+        let a = parse(&argv(base)).unwrap().unwrap();
+        assert_eq!(a.retries, None);
+        let a = parse(&argv(&format!("{base} --retries 1000"))).unwrap().unwrap();
+        assert_eq!(a.retries, Some(1000));
+        let a = parse(&argv(&format!("{base} --fm narrow --retries 0"))).unwrap().unwrap();
+        assert_eq!(a.retries, Some(0));
+        for bad in ["-1", "1.5", "4294967296", "lots"] {
+            assert!(parse(&argv(&format!("{base} --retries {bad}"))).is_err(), "{bad}");
+        }
     }
 
     #[test]

@@ -24,6 +24,8 @@ pub(crate) const RX_GRACE: Time = 2400;
 const REPEAT_LIMIT: u32 = 100;
 pub const NO_LEAD_HEARD: u8 = LEAD_ROWS as u8 + 1;
 
+pub const DEFAULT_RETRIES: u32 = 15;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub bw: FmBandwidth,
@@ -33,7 +35,7 @@ pub struct Config {
 
 impl Config {
     pub fn new(bw: FmBandwidth, mycall: &str) -> Self {
-        Self { bw, host: HostSettings::new(mycall, 10), seed: 1 }
+        Self { bw, host: HostSettings::new(mycall, DEFAULT_RETRIES), seed: 1 }
     }
 }
 

@@ -1,7 +1,7 @@
 mod common;
-use common::{Client, Lab, ask, check_sequence, events, is_reply, vector};
-use xara::station::Modem;
+use common::{ask, check_sequence, events, is_reply, vector, Client, Lab};
 use xara::station::hf::Station;
+use xara::station::Modem;
 use xara::tnc::Tnc;
 use xara_arq::hf::session::Config;
 use xara_arq::hf::session::State;
@@ -68,7 +68,14 @@ fn command_line_framing() {
 fn retries_chain() {
     let (mut lab, mut c) = solo();
     let r = |lab: &Lab| lab.tnc[0].station().config().host.retries;
-    for (cmd, want) in [("RETRIES 5", 5), ("RETRIES 7", 7), ("RETRIES 0", 5), ("RETRIES 300", 5), ("RETRIES -1", 5)] {
+    for (cmd, want) in [
+        ("RETRIES 5", 5),
+        ("RETRIES 7", 7),
+        ("RETRIES 0", 5),
+        ("RETRIES 300", 300),
+        ("RETRIES -1", 300),
+        ("RETRIES 1000", 1000),
+    ] {
         assert_eq!(ask(&mut lab, &mut c, format!("{cmd}\r").as_bytes(), 1), ["OK"]);
         assert_eq!(r(&lab), want, "{cmd}");
     }

@@ -419,7 +419,7 @@ impl<M: Modem> Tnc<M> {
                     Ok(0) | Err(Invalid) => None,
                     Ok(n) => {
                         self.saved_retries = cur;
-                        Some(u32::from(n))
+                        Some(n)
                     }
                 };
                 if let Some(n) = new {

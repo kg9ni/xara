@@ -1,4 +1,4 @@
-use xara_host::command::{Bw, Command, Comp, Drive, Invalid, fix_suffix, parse, valid_call};
+use xara_host::command::{fix_suffix, parse, valid_call, Bw, Command, Comp, Drive, Invalid};
 use xara_testkit::json::Value;
 
 fn vector(name: &str) -> Value {
@@ -25,7 +25,11 @@ fn parses_the_lab_command_set() {
     assert_eq!(parse("ABORT"), Some(Command::Abort));
     assert_eq!(parse("RETRIES 3"), Some(Command::Retries(Ok(3))));
     assert_eq!(parse("RETRIES abc"), Some(Command::Retries(Ok(0))));
-    assert_eq!(parse("RETRIES 300"), Some(Command::Retries(Err(Invalid))));
+    assert_eq!(parse("RETRIES 300"), Some(Command::Retries(Ok(300))));
+    assert_eq!(parse("RETRIES 1000"), Some(Command::Retries(Ok(1000))));
+    assert_eq!(parse("RETRIES 4294967295"), Some(Command::Retries(Ok(u32::MAX))));
+    assert_eq!(parse("RETRIES 4294967296"), Some(Command::Retries(Err(Invalid))));
+    assert_eq!(parse("RETRIES 1e10"), Some(Command::Retries(Err(Invalid))));
     assert_eq!(parse("RETRIES -1"), Some(Command::Retries(Err(Invalid))));
     assert_eq!(parse("RETRIES 1E1"), Some(Command::Retries(Ok(10))));
     assert_eq!(parse("RETRIES 2.5e+1"), Some(Command::Retries(Ok(25))));
@@ -41,7 +45,7 @@ fn parses_the_lab_command_set() {
     assert_eq!(parse("RETRIES &H1F"), Some(Command::Retries(Ok(31))));
     assert_eq!(parse("RETRIES &o17"), Some(Command::Retries(Ok(15))));
     assert_eq!(parse("RETRIES &HFFFF"), Some(Command::Retries(Err(Invalid))));
-    assert_eq!(parse("RETRIES &H1FFFF"), Some(Command::Retries(Err(Invalid))));
+    assert_eq!(parse("RETRIES &H1FFFF"), Some(Command::Retries(Ok(0x1ffff))));
     assert_eq!(parse("RETRIES E5"), Some(Command::Retries(Ok(0))));
     assert_eq!(parse("TUNE ?"), Some(Command::TuneQuery));
     assert_eq!(parse("TUNE -6"), Some(Command::Tune(Drive::Db(-6))));

@@ -28,6 +28,8 @@ const CALL_EXTRA_LEAD: u32 = 9;
 const ANSWER_EXTRA_LEAD: u32 = 7;
 const QRT_CWID_BLANKS: [u32; 3] = [9, 12, 10];
 
+pub const DEFAULT_RETRIES: u32 = 15;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub bw: Bandwidth,
@@ -40,7 +42,14 @@ pub struct Config {
 
 impl Config {
     pub fn new(bw: Bandwidth, mycall: &str) -> Self {
-        Self { bw, host: HostSettings::new(mycall, 15), p2p: false, cwid: false, seed: 1, offer_level: None }
+        Self {
+            bw,
+            host: HostSettings::new(mycall, DEFAULT_RETRIES),
+            p2p: false,
+            cwid: false,
+            seed: 1,
+            offer_level: None,
+        }
     }
 }
 

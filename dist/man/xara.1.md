@@ -74,6 +74,11 @@ along with KISS for applications such as Pat. See the README for full details.
 
 :   Run as VARA FM instead of HF.
 
+**--retries** *N*
+
+:   How many times to try the initial connection. Any whole number from 0 to
+    4294967295 (default 15). Resends after the link is up are unchanged.
+
 **--digi** *CALL*
 
 :   FM only: also digipeat for *CALL*.

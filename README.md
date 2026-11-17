@@ -20,6 +20,52 @@ to transmit, add `--radio` and `--ptt` flags.
  - digipeating (enable by call with `--digi N1CALL`)
  - `xara-monitor`: passive VARA HF monitor (with web UI)
 
+## install
+
+linux, freebsd and macOS only. xara has no Windows build: it talks to the
+sound systems on those three systems.
+
+### linux
+
+download the release tarball for your machine:
+
+- `xara-0.1.4-x86_64-unknown-linux-gnu.tar.xz` for a normal PC
+- `xara-0.1.4-aarch64-unknown-linux-gnu.tar.xz` for a 64-bit Pi
+- `xara-0.1.4-armv7-unknown-linux-gnueabihf.tar.xz` for a 32-bit Pi
+
+unpack it, then install the program and the service files:
+
+    tar -xJf xara-0.1.4-x86_64-unknown-linux-gnu.tar.xz
+    cd xara-0.1.4-x86_64-unknown-linux-gnu
+    sudo ./dist/install.sh .
+
+copy `dist/xara.conf.example` to `~/.config/xara/xara.conf`, fill in your
+call sign and sound devices, and add:
+
+    ui-port = 8080
+    ui-control
+    state-dir = /home/YOU/.local/state/xara
+
+start it with `systemctl --user enable --now xara`, or run `xara --config ~/.config/xara/xara.conf`.
+the page address is printed at startup. open that address in a browser.
+
+### macOS
+
+build from this folder (CoreAudio is the sound system; Pulse and ALSA are not used):
+
+    cargo install --locked --path crates/xara
+
+copy `dist/xara.conf.example` to `~/.config/xara/xara.conf` and set your call,
+capture, and playback names (`xara --list-devices` prints them). to have it
+start at login, edit `dist/launchd/xara.plist` (replace `YOU` with your login
+name) and load it with launchctl. the web page address is in
+`~/Library/Logs/xara.log`.
+
+### windows
+
+there is no Windows installer. xara does not run on Windows. use Linux,
+FreeBSD, or macOS.
+
 ## building
 
 install deps (debian/ubuntu):
@@ -69,6 +115,7 @@ container on x86_64:
 
     --hf 500|2300|2750      HF mode, bandwidth setting
     --fm narrow|wide        FM mode, narrow vs wide
+    --retries N             initial connection attempts (default: 15)
 
     --radio                 enable radio mode
     --drive-db D            TX drive (<= 0 dB, default -5)
