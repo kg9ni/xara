@@ -4,7 +4,6 @@
 
 - connection retries are configurable, default 15, any whole number
 - the count applies only to the opening connection attempts
-- Windows: WASAPI sound, COM-port RTS/DTR push-to-talk, and a stop that unkeys the radio
 
 ## 0.1.3
 

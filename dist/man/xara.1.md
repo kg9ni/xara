@@ -20,8 +20,7 @@ xara - VARA-compatible HF/FM modem
 # DESCRIPTION
 
 **xara** is a modem compatible with VARA HF and VARA FM. It supports audio via
-ALSA and PipeWire/Pulse on Linux and FreeBSD, CoreAudio on macOS, and WASAPI on
-Windows. It also exposes TCP ports for VARA's command and data
+ALSA and PipeWire/Pulse on Linux and FreeBSD, and CoreAudio on macOS. It also exposes TCP ports for VARA's command and data
 along with KISS for applications such as Pat. See the README for full details.
 
 # OPTIONS
@@ -36,11 +35,10 @@ along with KISS for applications such as Pat. See the README for full details.
     Without **--config**, xara reads *$XDG_CONFIG_HOME/xara/xara.conf* (by
     default *~/.config/xara/xara.conf*) if it exists.
 
-**--audio** pulse|alsa|coreaudio|wasapi
+**--audio** pulse|alsa|coreaudio
 
 :   Audio backend. On macOS, CoreAudio is the default and only backend.
-    On Windows, WASAPI is the default. Elsewhere the default is Pulse if
-    compiled in, otherwise ALSA.
+    Elsewhere the default is Pulse if compiled in, otherwise ALSA.
 
 **--list-devices**
 
@@ -48,16 +46,14 @@ along with KISS for applications such as Pat. See the README for full details.
 
 **--capture** *SOURCE*
 
-:   Pulse source, ALSA PCM, CoreAudio, or WASAPI device to receive from
-    (required). CoreAudio devices are named by UID or exact name. WASAPI
-    devices are named by the friendly name or id from **--list-devices**.
+:   Pulse source, ALSA PCM, or CoreAudio device to receive from (required).
+    CoreAudio devices are named by UID or exact name.
 
 **--playback** *SINK*
 
-:   Pulse sink, ALSA PCM, CoreAudio, or WASAPI device to transmit into
-    (required). Without **--radio**, it must be a Pulse null sink, the ALSA
-    **null** PCM, a virtual CoreAudio device such as BlackHole, or a WASAPI
-    name containing cable, virtual, voicemeeter, or null.
+:   Pulse sink, ALSA PCM, or CoreAudio device to transmit into (required).
+    Without **--radio**, it must be a Pulse null sink, the ALSA **null** PCM,
+    or a virtual CoreAudio device such as BlackHole.
 
 **--tx-buffer-ms** *N*
 
@@ -155,8 +151,7 @@ along with KISS for applications such as Pat. See the README for full details.
 
 :   PTT method; requires **--radio**. One of **vox**, **rts:***DEV* or
     **dtr:***DEV*, **cm108:***DEV[:GPIO]*, **cm108:***VID***:***PID[:GPIO]*, or
-    **rigctld**[**:***HOST***:***PORT*]. On Windows, *DEV* is a COM port such
-    as COM3. For full details see README.
+    **rigctld**[**:***HOST***:***PORT*]. For full details see README.
 
     **cm108:***VID***:***PID* identifies the device by the 4-digit hex
     USB IDs, which survives a hidraw renumbering. device itself, so it

@@ -29,14 +29,14 @@ timestamped details about the observed packets.
 
 :   s16le mono at *RATE* Hz (1000-1000000) on stdin
 
-**--audio** pulse|alsa|coreaudio|wasapi
+**--audio** pulse|alsa|coreaudio
 
-:   Backend for **--capture** (default coreaudio on macOS, wasapi on Windows,
-    else pulse, or alsa when pulse is not present)
+:   Backend for **--capture** (default coreaudio on macOS, else pulse, or alsa
+    when pulse is not present)
 
 **--capture** *SOURCE*
 
-:   Pulse source, ALSA PCM, CoreAudio, or WASAPI device, opened capture-only.
+:   Pulse source, ALSA PCM or CoreAudio device, opened capture-only.
 
 **--hf** 500|2300|2750
 

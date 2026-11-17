@@ -21,13 +21,12 @@ PCM 8/16/24/32\-bit or float WAV at any rate
 \f[B]\-\-stdin\f[R] \f[I]RATE\f[R]
 s16le mono at \f[I]RATE\f[R] Hz (1000\-1000000) on stdin
 .TP
-\f[B]\-\-audio\f[R] pulse|alsa|coreaudio|wasapi
-Backend for \f[B]\-\-capture\f[R] (default coreaudio on macOS, wasapi on
-Windows, else pulse, or alsa when pulse is not present)
+\f[B]\-\-audio\f[R] pulse|alsa|coreaudio
+Backend for \f[B]\-\-capture\f[R] (default coreaudio on macOS, else pulse,
+or alsa when pulse is not present)
 .TP
 \f[B]\-\-capture\f[R] \f[I]SOURCE\f[R]
-Pulse source, ALSA PCM, CoreAudio, or WASAPI device, opened
-capture\-only.
+Pulse source, ALSA PCM or CoreAudio device, opened capture\-only.
 .TP
 \f[B]\-\-hf\f[R] 500|2300|2750
 HF bandwidth (default: 2300)

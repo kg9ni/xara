@@ -59,13 +59,6 @@
 #capture = USB Audio CODEC
 #playback = USB Audio CODEC
 
-# Windows (WASAPI). build with: cargo build --release --no-default-features
-# list devices: xara --list-devices
-# capture and playback are the names from that list
-#capture = Microphone
-#playback = CABLE Input
-#ptt = rts:COM3
-
 # null sinks only, no radio (can't be used with radio or ptt)
 #capture = xara_rx.monitor
 #playback = xara_tx

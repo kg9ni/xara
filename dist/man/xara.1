@@ -23,8 +23,8 @@ xara \- VARA\-compatible HF/FM modem
 \f[B]\-\-list\-devices\f[R]
 .SH DESCRIPTION
 \f[B]xara\f[R] is a modem compatible with VARA HF and VARA FM.
-It supports audio via ALSA and PipeWire/Pulse on Linux and FreeBSD,
-CoreAudio on macOS, and WASAPI on Windows.
+It supports audio via ALSA and PipeWire/Pulse on Linux and FreeBSD, and
+CoreAudio on macOS.
 It also exposes TCP ports for VARA\(aqs command and data along with KISS
 for applications such as Pat.
 See the README for full details.
@@ -44,28 +44,22 @@ Without \f[B]\-\-config\f[R], xara reads
 \f[I]\(ti/.config/xara/xara.conf\f[R]) if it exists.
 .RE
 .TP
-\f[B]\-\-audio\f[R] pulse|alsa|coreaudio|wasapi
+\f[B]\-\-audio\f[R] pulse|alsa|coreaudio
 Audio backend.
 On macOS, CoreAudio is the default and only backend.
-On Windows, WASAPI is the default.
 Elsewhere the default is Pulse if compiled in, otherwise ALSA.
 .TP
 \f[B]\-\-list\-devices\f[R]
 List capture and playback devices for \f[B]\-\-audio\f[R].
 .TP
 \f[B]\-\-capture\f[R] \f[I]SOURCE\f[R]
-Pulse source, ALSA PCM, CoreAudio, or WASAPI device to receive from
-(required).
+Pulse source, ALSA PCM, or CoreAudio device to receive from (required).
 CoreAudio devices are named by UID or exact name.
-WASAPI devices are named by the friendly name or id from
-\f[B]\-\-list\-devices\f[R].
 .TP
 \f[B]\-\-playback\f[R] \f[I]SINK\f[R]
-Pulse sink, ALSA PCM, CoreAudio, or WASAPI device to transmit into
-(required).
+Pulse sink, ALSA PCM, or CoreAudio device to transmit into (required).
 Without \f[B]\-\-radio\f[R], it must be a Pulse null sink, the ALSA
-\f[B]null\f[R] PCM, a virtual CoreAudio device such as BlackHole, or a
-WASAPI name containing cable, virtual, voicemeeter, or null.
+\f[B]null\f[R] PCM, or a virtual CoreAudio device such as BlackHole.
 .TP
 \f[B]\-\-tx\-buffer\-ms\f[R] \f[I]N\f[R]
 Transmit audio queued ahead of the sound card, in ms.
@@ -155,7 +149,6 @@ One of \f[B]vox\f[R], \f[B]rts:\f[R]\f[I]DEV\f[R] or
 \f[B]dtr:\f[R]\f[I]DEV\f[R], \f[B]cm108:\f[R]\f[I]DEV[:GPIO]\f[R],
 \f[B]cm108:\f[R]\f[I]VID\f[R]\f[B]:\f[R]\f[I]PID[:GPIO]\f[R], or
 \f[B]rigctld\f[R][\f[B]:\f[R]\f[I]HOST\f[R]\f[B]:\f[R]\f[I]PORT\f[R]].
-On Windows, \f[I]DEV\f[R] is a COM port such as COM3.
 For full details see README.
 .RS
 .PP

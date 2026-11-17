@@ -1,6 +1,92 @@
 # xara
 
-a VARA-compatible modem for linux, freebsd, macOS and windows. tested against VARA HF 4.9.0 and FM 4.4.0.
+This is **kg9ni's fork** of [x0rro/xara](https://github.com/x0rro/xara).
+xara is a modem that speaks the same on-air protocol as VARA HF and VARA FM.
+It is tested against VARA HF 4.9.0 and VARA FM 4.4.0.
+
+## what this fork adds
+
+- **Connection Retries.** You choose how many times xara tries to make the
+  first connection. The usual number is **15**. You can use any whole number
+  from 0 up to 4294967295. `0` or `1` means it calls once, then stops.
+- That number is only the opening calls, before the link is up. After you are
+  connected, resends of data stay the same.
+- Set it in any of these places. Leave it unset and xara uses 15.
+  - the web page, under Settings, in the box labeled **Connection Retries**
+  - the command that starts xara: `--retries 15`
+  - the config file: `retries = 15`
+
+## install on Linux
+
+These steps build this fork and open its web page. Use a PC running Debian,
+Ubuntu, or another similar Linux system.
+
+1. Open a terminal.
+2. Install the sound libraries. Type this and press Enter:
+
+       sudo apt update
+       sudo apt install -y build-essential pkg-config libpulse-dev libasound2-dev
+
+   When it works, the command ends and does not print `E:`.
+3. Check for Rust. Type `cargo --version`. If the terminal says the command
+   was not found, install Rust:
+
+       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+   Press Enter to accept the default choices. Close the terminal, open a new
+   one, and type `cargo --version` again. You should see a version number.
+4. Download this fork and go into its folder:
+
+       git clone https://github.com/kg9ni/xara.git
+       cd xara
+5. Build and install the program. The first build can take several minutes.
+
+       cargo install --locked --path crates/xara
+
+   When it works, the last lines include `Installed package xara`.
+6. Make a config folder and copy the example file:
+
+       mkdir -p ~/.config/xara ~/.local/state/xara
+       cp dist/xara.conf.example ~/.config/xara/xara.conf
+7. See the names of your sound devices:
+
+       xara --list-devices
+8. Open the config file:
+
+       nano ~/.config/xara/xara.conf
+
+   Delete the `#` at the start of each line you want to use, then fill it in:
+
+   - `call` is your call sign
+   - `hf` is `500`, `2300`, or `2750`
+   - `capture` and `playback` are names from step 7
+   - `retries` stays `15`, or you type another whole number
+   - `ui-port` is `8080`
+   - `ui-control` turns on saving from the web page
+   - `state-dir` is `/home/YOU/.local/state/xara`, with your login name
+     instead of `YOU`
+
+   Save and close. In nano, press Ctrl+O, Enter, then Ctrl+X.
+9. Start xara:
+
+       xara --config ~/.config/xara/xara.conf
+10. Read the text xara prints. Find the line that starts with
+    `UI controls enabled at http://`.
+11. Open Firefox or Chrome. Click the address bar, paste that whole address
+    (it includes `?token=`), and press Enter.
+
+You should see the xara page. **Settings** is near the bottom, and
+**Connection Retries** is in that section. An empty box means 15.
+
+To start xara whenever you log in, run this after step 8:
+
+    systemctl --user enable --now xara
+
+That service reads `~/.config/xara/xara.conf`. The page address is in the
+log. Show the last lines with:
+
+    journalctl --user -u xara -n 30
+
 
 ## minimum config
 
@@ -20,79 +106,6 @@ to transmit, add `--radio` and `--ptt` flags.
  - digipeating (enable by call with `--digi N1CALL`)
  - `xara-monitor`: passive VARA HF monitor (with web UI)
 
-## install
-
-linux and freebsd use ALSA or Pulse. macOS uses CoreAudio. windows uses
-WASAPI, the sound system built into Windows.
-
-### linux
-
-download the release tarball for your machine:
-
-- `xara-0.1.4-x86_64-unknown-linux-gnu.tar.xz` for a normal PC
-- `xara-0.1.4-aarch64-unknown-linux-gnu.tar.xz` for a 64-bit Pi
-- `xara-0.1.4-armv7-unknown-linux-gnueabihf.tar.xz` for a 32-bit Pi
-
-unpack it, then install the program and the service files:
-
-    tar -xJf xara-0.1.4-x86_64-unknown-linux-gnu.tar.xz
-    cd xara-0.1.4-x86_64-unknown-linux-gnu
-    sudo ./dist/install.sh .
-
-copy `dist/xara.conf.example` to `~/.config/xara/xara.conf`, fill in your
-call sign and sound devices, and add:
-
-    ui-port = 8080
-    ui-control
-    state-dir = /home/YOU/.local/state/xara
-
-start it with `systemctl --user enable --now xara`, or run `xara --config ~/.config/xara/xara.conf`.
-the page address is printed at startup. open that address in a browser.
-
-### macOS
-
-build from this folder (CoreAudio is the sound system; Pulse and ALSA are not used):
-
-    cargo install --locked --path crates/xara
-
-copy `dist/xara.conf.example` to `~/.config/xara/xara.conf` and set your call,
-capture, and playback names (`xara --list-devices` prints them). to have it
-start at login, edit `dist/launchd/xara.plist` (replace `YOU` with your login
-name) and load it with launchctl. the web page address is in
-`~/Library/Logs/xara.log`.
-
-### windows
-
-there is no installer file yet. build xara on the Windows PC. the Windows
-build uses WASAPI for sound. USB CM108 keying and (tr)uSDX are not in this
-version.
-
-1. Install Rust from <https://rustup.rs>. The default choices are fine. Close
-   the installer, then open a new PowerShell window.
-2. Go to the xara folder and type this:
-
-       cargo build --release --no-default-features
-
-   `--no-default-features` leaves out the Linux sound libraries, which do not
-   build on Windows. Success looks like `Finished release` and a program at
-   `target\release\xara.exe`.
-3. See the sound device names:
-
-       .\target\release\xara.exe --list-devices
-
-4. Start xara with your call sign, those names, and a COM port for the
-   push-to-talk line. Example:
-
-       .\target\release\xara.exe --call YOURCALL --hf 2300 --capture "Microphone" --playback "CABLE Input" --radio --ptt rts:COM3 --ui-port 8080 --ui-control
-
-5. The page address is printed at startup. Open that address in a browser.
-
-`--ptt rts:COM3` keys the radio with the RTS line on COM3. `dtr:COM3` uses DTR.
-`rigctld` and `vox` work too. without `--radio`, playback has to be a virtual
-cable: the name contains cable, virtual, voicemeeter, or null. Ctrl+C stops
-xara and unkeys the radio. a second Ctrl+C, or closing the window, unkeys
-before the program exits.
-
 ## building
 
 install deps (debian/ubuntu):
@@ -101,7 +114,7 @@ install deps (debian/ubuntu):
 
 then install from here:
 
-    cargo install --locked --git https://github.com/x0rro/xara xara
+    cargo install --locked --git https://github.com/kg9ni/xara xara
 
 alternatively for a local setup you can do:
 
@@ -134,7 +147,7 @@ container on x86_64:
 
     --call CALL             your callsign (required)
 
-    --audio BACKEND         pulse, alsa, coreaudio or wasapi; default pulse on linux/bsd, coreaudio on macOS, wasapi on windows
+    --audio BACKEND         pulse, alsa or coreaudio; default pulse on linux/bsd and coreaudio on macOS
     --list-devices          list capture and playback devices for --audio
     --capture SOURCE        audio source
     --playback SINK         audio sink
@@ -188,9 +201,6 @@ summary of settings:
     --ptt vox                   use VOX (just don't bother)
     --ptt rts:DEV               key serial port on rts, hold dtr low
     --ptt dtr:DEV               key serial port on dtr, hold rts low
-
-on Windows, DEV is a COM port such as COM3 (`rts:COM3`). CM108 keying and
-(tr)uSDX are not available in this Windows version.
     --ptt cm108:DEV[:GPIO]      cm108/cm119 HID GPIO (default GPIO: 3)
     --ptt cm108:VID:PID[:GPIO]  cm108/cm119 by hex USB id (stable across boots)
     --ptt rigctld[:HOST:PORT]   hamlib rigctld CAT on HOST:PORT
@@ -212,7 +222,7 @@ options:
     --wav FILE              load from a wav file
     --stdin RATE            s16le mono at RATE Hz
 
-    --audio BACKEND         pulse, alsa, coreaudio or wasapi; default coreaudio on macOS, wasapi on windows, else pulse
+    --audio BACKEND         pulse, alsa or coreaudio; default coreaudio on macOS, else pulse
     --capture SOURCE        audio source
 
     --hf 500|2300|2750      HF bandwidth (default 2300)
